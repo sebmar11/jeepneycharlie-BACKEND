@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Jeepney Charlie — Dashboard</title>
+<style>
+  :root {
+    --red: #c0392b;
+    --yellow: #f5c518;
+    --dark: #1a1a1a;
+    --gray: #2e2e2e;
+    --light: #f5f5f5;
+    --text: #111;
+    --muted: #777;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--light); font-family: 'Segoe UI', sans-serif; color: var(--text); }
+
+  header {
+    background: var(--dark);
+    color: #fff;
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  header h1 { font-size: 1.1rem; font-weight: 800; letter-spacing: 1px; }
+  header h1 span { color: var(--yellow); }
+  #live-indicator { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: rgba(255,255,255,0.6); }
+  #live-dot { width: 9px; height: 9px; border-radius: 50%; background: #2ecc71; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .filters {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem 1.5rem;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    overflow-x: auto;
+    flex-wrap: wrap;
+  }
+  .filter-btn {
+    padding: 6px 16px;
+    border-radius: 999px;
+    border: 2px solid #ddd;
+    background: #fff;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.85rem;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .filter-btn.active { background: var(--dark); color: #fff; border-color: var(--dark); }
+  .filter-btn[data-filter="pending"].active  { background: #e67e22; border-color: #e67e22; }
+  .filter-btn[data-filter="preparing"].active{ background: #2980b9; border-color: #2980b9; }
+  .filter-btn[data-filter="ready"].active    { background: #27ae60; border-color: #27ae60; }
+  .filter-btn[data-filter="done"].active     { background: #7f8c8d; border-color: #7f8c8d; }
+
+  #orders-list {
+    padding: 1.2rem 1.5rem;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+
+  .order-card {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    overflow: hidden;
+    border-left: 6px solid #ddd;
+    transition: box-shadow 0.2s;
+  }
+  .order-card.pending   { border-left-color: #e67e22; }
+  .order-card.preparing { border-left-color: #2980b9; }
+  .order-card.ready     { border-left-color: #27ae60; }
+  .order-card.done      { border-left-color: #bdc3c7; opacity: 0.7; }
+
+  .card-header {
+    padding: 1rem 1.1rem 0.6rem;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .order-number { font-size: 1.2rem; font-weight: 900; letter-spacing: 1px; }
+  .order-time   { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .status-badge {
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  .status-badge.pending   { background: #fdebd0; color: #e67e22; }
+  .status-badge.preparing { background: #d6eaf8; color: #2980b9; }
+  .status-badge.ready     { background: #d5f5e3; color: #27ae60; }
+  .status-badge.done      { background: #eaecee; color: #7f8c8d; }
+
+  .card-customer {
+    padding: 0 1.1rem 0.6rem;
+    font-size: 0.9rem;
+  }
+  .card-customer strong { font-weight: 700; }
+  .card-customer a { color: var(--muted); font-size: 0.82rem; text-decoration: none; }
+  .card-customer a:hover { color: var(--red); }
+
+  .card-items {
+    padding: 0.6rem 1.1rem;
+    border-top: 1px solid #f0f0f0;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .order-item { padding: 0.35rem 0; }
+  .order-item-name { font-weight: 600; font-size: 0.92rem; display: flex; justify-content: space-between; }
+  .order-item-name span { color: var(--muted); font-weight: 400; }
+  .order-item-addons { font-size: 0.8rem; color: var(--muted); margin-top: 1px; }
+  .order-item-note { font-size: 0.8rem; color: #c0392b; font-style: italic; margin-top: 2px; }
+
+  .card-total {
+    padding: 0.6rem 1.1rem;
+    font-size: 0.95rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .card-total strong { font-size: 1.1rem; font-weight: 900; }
+
+  .card-actions {
+    padding: 0.7rem 1.1rem 1rem;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .status-btn {
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 700;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .status-btn:hover { opacity: 0.85; transform: scale(1.03); }
+  .status-btn:active { transform: scale(0.97); }
+  .status-btn.set-preparing { background: #2980b9; color: #fff; }
+  .status-btn.set-ready     { background: #27ae60; color: #fff; }
+  .status-btn.set-done      { background: #7f8c8d; color: #fff; }
+  .status-btn.set-pending   { background: #e67e22; color: #fff; }
+
+  .pay-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.4px; }
+  .pay-badge.cash   { background: #e8f8ef; color: #1a7a3a; }
+  .pay-badge.gcash  { background: #e0eaf8; color: #0060ad; }
+  .pay-badge.pending_payment  { background: #fff3cd; color: #856404; }
+  .pay-badge.pending_pickup   { background: #e8f8ef; color: #1a7a3a; }
+  .pay-badge.paid             { background: #d1ecf1; color: #0c5460; }
+    grid-column: 1/-1;
+    text-align: center;
+    padding: 4rem 1rem;
+    color: var(--muted);
+    font-size: 1rem;
+  }
+  #empty-state big { display: block; font-size: 3rem; margin-bottom: 0.5rem; }
+
+  #new-order-toast {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #27ae60;
+    color: #fff;
+    padding: 0.7rem 1.4rem;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    transition: transform 0.3s ease;
+    z-index: 100;
+    pointer-events: none;
+  }
+  #new-order-toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>JEEPNEY <span>CHARLIE</span> — Orders</h1>
+  <div id="live-indicator"><span id="live-dot"></span> LIVE</div>
+</header>
+
+<div class="filters">
+  <button class="filter-btn active" data-filter="all">All</button>
+  <button class="filter-btn" data-filter="pending">Pending</button>
+  <button class="filter-btn" data-filter="preparing">Preparing</button>
+  <button class="filter-btn" data-filter="ready">Ready</button>
+  <button class="filter-btn" data-filter="done">Done</button>
+</div>
+
+<div id="orders-list"></div>
+<div id="new-order-toast">🔔 New order received!</div>
+
+<script>
+  const API = '';  // same origin — no need for full URL when served by backend
+  let orders = [];
+  let currentFilter = 'all';
+  let knownIds = new Set();
+  let firstLoad = true;
+
+  function timeAgo(dateStr) {
+    const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+    return new Date(dateStr).toLocaleDateString();
+  }
+
+  function statusLabel(s) {
+    return { pending:'Pending', preparing:'Preparing', ready:'Ready for Pickup', done:'Done' }[s] || s;
+  }
+
+  function renderOrders() {
+    const list = document.getElementById('orders-list');
+    const filtered = currentFilter === 'all' ? orders : orders.filter(o => o.status === currentFilter);
+    if (!filtered.length) {
+      list.innerHTML = `<div id="empty-state"><big>🍔</big>No ${currentFilter === 'all' ? '' : currentFilter + ' '}orders yet.</div>`;
+      return;
+    }
+    list.innerHTML = filtered.map(o => {
+      const items = Array.isArray(o.items) ? o.items : JSON.parse(o.items);
+      const itemsHtml = items.map(item => {
+        const addons = item.addons && Object.keys(item.addons).length
+          ? Object.entries(item.addons).map(([k,v]) => `${k}: ${v}`).join(', ')
+          : '';
+        return `
+          <div class="order-item">
+            <div class="order-item-name">${item.name} x${item.qty || 1} <span>₱${(item.price*(item.qty||1)).toFixed(0)}</span></div>
+            ${addons ? `<div class="order-item-addons">+ ${addons}</div>` : ''}
+          </div>`;
+      }).join('');
+
+      const nextButtons = {
+        pending:   `<button class="status-btn set-preparing" onclick="setStatus('${o.order_number}','preparing')">▶ Start Preparing</button>`,
+        preparing: `<button class="status-btn set-ready" onclick="setStatus('${o.order_number}','ready')">✓ Mark Ready</button>`,
+        ready:     `<button class="status-btn set-done" onclick="setStatus('${o.order_number}','done')">✓ Mark Done</button>`,
+        done:      ''
+      }[o.status] || '';
+
+      const backButton = o.status !== 'pending'
+        ? `<button class="status-btn set-pending" onclick="setStatus('${o.order_number}','pending')" style="background:#eee;color:#555;">↩ Revert</button>`
+        : '';
+
+      return `
+        <div class="order-card ${o.status}" id="card-${o.order_number}">
+          <div class="card-header">
+            <div>
+              <div class="order-number">${o.order_number}</div>
+              <div class="order-time">${timeAgo(o.created_at)}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+              <span class="status-badge ${o.status}">${statusLabel(o.status)}</span>
+              <span class="pay-badge ${o.payment_method||'cash'}">${o.payment_method==='gcash_whatsapp'?'💳 GCash':'💵 Cash'}</span>
+              ${o.payment_status==='pending_payment'?`<span class="pay-badge pending_payment">⏳ Awaiting Payment</span>`:''}
+            </div>
+          </div>
+          <div class="card-customer">
+            <strong>${o.customer_name}</strong><br>
+            ${o.customer_phone ? `<a href="tel:${o.customer_phone}">${o.customer_phone}</a>` : ''}
+            ${(() => {
+              if (!o.notes) return '';
+              const parts = o.notes.split(' | ');
+              const pickup = parts.find(p => p.startsWith('Pickup:'));
+              const instructions = parts.filter(p => !p.startsWith('Pickup:')).join(' | ');
+              return `
+                ${pickup ? `<div style="font-size:0.82rem;color:#555;margin-top:3px;">⏰ ${pickup}</div>` : ''}
+                ${instructions ? `<div style="font-size:0.85rem;color:#c0392b;font-weight:700;margin-top:4px;background:#fff5f5;padding:5px 8px;border-radius:6px;border-left:3px solid #c0392b;">⚠️ ${instructions}</div>` : ''}
+              `;
+            })()}
+          </div>
+          <div class="card-items">${itemsHtml}</div>
+          <div class="card-total">Total <strong>₱${parseFloat(o.total).toFixed(0)}</strong></div>
+          <div class="card-actions">${nextButtons}${backButton}</div>
+        </div>`;
+    }).join('');
+  }
+
+  async function fetchOrders() {
+    try {
+      const res = await fetch(`${API}/orders`);
+      const data = await res.json();
+      if (!Array.isArray(data)) return;
+      if (!firstLoad) {
+        const newOnes = data.filter(o => !knownIds.has(o.id));
+        if (newOnes.length) showToast();
+      }
+      data.forEach(o => knownIds.add(o.id));
+      orders = data;
+      firstLoad = false;
+      renderOrders();
+    } catch(e) { console.error('Fetch error', e); }
+  }
+
+  async function setStatus(orderNumber, status) {
+    try {
+      const res = await fetch(`${API}/orders/${orderNumber}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      const updated = await res.json();
+      orders = orders.map(o => o.order_number === orderNumber ? updated : o);
+      renderOrders();
+    } catch(e) { alert('Failed to update. Check your connection.'); }
+  }
+
+  function showToast() {
+    const t = document.getElementById('new-order-toast');
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      renderOrders();
+    });
+  });
+
+  fetchOrders();
+  setInterval(fetchOrders, 8000);
+</script>
+</body>
+</html>
